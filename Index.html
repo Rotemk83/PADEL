@@ -4,15 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Padel Monitor Dashboard</title>
+
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
     <style>
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f4f7f9;
         }
-        /* Custom scrollbar styling for the table container */
         .scroll-container::-webkit-scrollbar {
             height: 8px;
         }
@@ -25,7 +26,7 @@
 <body class="p-4 sm:p-8">
 
     <div class="max-w-6xl mx-auto bg-white p-6 sm:p-8 rounded-xl shadow-2xl">
-        
+
         <!-- Header -->
         <header class="mb-8 border-b pb-4">
             <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 flex items-center">
@@ -46,14 +47,13 @@
                 <label for="status-filter" class="text-gray-700 font-medium">Filter Status:</label>
                 <select id="status-filter" class="p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 transition duration-150">
                     <option value="all">All Statuses</option>
-                    <!-- Note: Your data shows 'available', not 'Available', so we'll adjust the options -->
                     <option value="available">Available</option> 
                     <option value="booked">Booked</option>
                 </select>
             </div>
         </div>
 
-        <!-- Data Display Area (Table) -->
+        <!-- Data Table -->
         <div class="scroll-container overflow-x-auto shadow-inner rounded-lg border border-gray-100">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50 sticky top-0">
@@ -65,7 +65,6 @@
                     </tr>
                 </thead>
                 <tbody id="courts-table-body" class="bg-white divide-y divide-gray-100">
-                    <!-- Data will be injected here -->
                     <tr><td colspan="4" class="text-center py-6 text-gray-500">Loading court data...</td></tr>
                 </tbody>
             </table>
@@ -73,59 +72,71 @@
 
         <!-- Error Message -->
         <div id="error-message" class="hidden mt-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg" role="alert">
-            <strong class="font-bold">Error:</strong> 
-            <span id="error-text" class="block sm:inline">Could not load data. Please ensure the Google Sheet ID is correct and the sheet is published to the web.</span>
+            <strong class="font-bold">Error:</strong>
+            <span id="error-text" class="block sm:inline">Could not load data. Please ensure the Google Sheet is correctly published.</span>
         </div>
-        
+
     </div>
 
     <script>
-        // =================================================================
-        // FIXED CONFIGURATION
-        // =================================================================
-const SHEET_ID = '1O76uXL2OjkzvhRlL70xQG6nwmgUJGoDcRK9gOCR_7xY';
-const SHEET_GID = '707982245';
+        // Sheet configuration
+        const SHEET_ID = '1O76uXL2OjkzvhRlL70xQG6nwmgUJGoDcRK9gOCR_7xY';
+        const SHEET_GID = '707982245';
+        const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
 
-const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
-        
-        // ** FIX: Fixed column mapping to match the order of A, B, C, D **
-        // Col A (Index 0) -> Location
-        // Col B (Index 1) -> Time (Note: your data shows Time in column B, but the parser was trying to match Time Slot which might be incorrect)
-        // Col C (Index 2) -> Status
-        // Col D (Index 3) -> Last_Checked
-        const COLUMN_MAP = ['Location', 'Time', 'Status', 'Last_Checked']; 
-        
-        // =================================================================
+        // Column order mapping
+        const COLUMN_MAP = ['Location', 'Time', 'Status', 'Last_Checked'];
 
         const tableBody = document.getElementById('courts-table-body');
         const searchInput = document.getElementById('search-input');
         const statusFilter = document.getElementById('status-filter');
         const lastUpdated = document.getElementById('last-updated');
         const errorMessage = document.getElementById('error-message');
-        
+
         let courtData = [];
 
-        // Utility to handle exponential backoff for retries
+        // ⭐ Convert "4-4:30 PM" → "16:00-16:30"
+        function convertTo24Hour(timeRange) {
+            if (!timeRange || typeof timeRange !== "string") return timeRange;
+
+            try {
+                const parts = timeRange.trim().split(" ");
+                const period = parts.pop(); // AM or PM
+                const range = parts.join(" ").split("-");
+
+                const convert = (timeStr) => {
+                    let [hour, minute] = timeStr.split(":");
+                    hour = parseInt(hour);
+                    minute = minute ? parseInt(minute) : 0;
+
+                    if (period === "PM" && hour !== 12) hour += 12;
+                    if (period === "AM" && hour === 12) hour = 0;
+
+                    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                };
+
+                return `${convert(range[0])}-${convert(range[1])}`;
+            } catch {
+                return timeRange;
+            }
+        }
+
+        // Retry fetch with exponential backoff
         const fetchWithRetry = async (url, maxRetries = 5) => {
             for (let i = 0; i < maxRetries; i++) {
                 try {
                     const response = await fetch(url);
-                    if (!response.ok) {
-                        // Throw an error if the response status is not OK (e.g., 404 or a redirect)
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
+                    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
                     return await response.text();
                 } catch (error) {
                     console.error(`Attempt ${i + 1} failed:`, error.message);
-                    if (i === maxRetries - 1) throw error; 
-                    // Wait for 2^i seconds before next retry
-                    const delay = Math.pow(2, i) * 1000;
-                    await new Promise(resolve => setTimeout(resolve, delay));
+                    if (i === maxRetries - 1) throw error;
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
                 }
             }
         };
 
-        // Fetches and parses the data from the Google Sheet
+        // Fetch and parse Google Sheet data
         async function fetchCourtData() {
             try {
                 tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-green-500 animate-pulse">Fetching Padel data...</td></tr>';
@@ -133,80 +144,66 @@ const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tq
 
                 const responseText = await fetchWithRetry(SHEET_URL);
 
-                // Google Sheets API returns JSON wrapped in a function call (JSONP format)
                 const jsonText = responseText.substring(
                     responseText.indexOf("{"), 
                     responseText.lastIndexOf("}") + 1
                 );
                 const json = JSON.parse(jsonText);
-                
+
                 const rows = json.table.rows;
 
-                // Transform rows into an array of objects using the fixed column map
                 courtData = rows.map(row => {
                     let court = {};
                     row.c.forEach((cell, index) => {
                         const header = COLUMN_MAP[index];
-                        // Extract the raw value or a friendly display value
                         court[header] = cell ? (cell.v || cell.f || '') : '';
                     });
                     return court;
                 });
-                
-                // Initial render
+
                 renderTable(courtData);
-                lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()} (Data from Google Sheet)`;
+
+                lastUpdated.textContent =
+                    `Last updated: ${new Date().toLocaleTimeString()} (Google Sheet sync)`;
 
             } catch (error) {
-                console.error('Failed to load data from Google Sheet:', error);
-                
-                // CRITICAL ERROR MESSAGE: Assuming the CORS/302 issue is fixed, this shows a generic data fetch error.
-                document.getElementById('error-text').innerHTML = `
-                    <p class="font-bold">Data Fetch Error.</p>
-                    <p>The system failed to retrieve or parse the data, likely due to a change in the Google Sheet's columns or API availability. Please verify your column headers and data structure in the sheet.</p>
-                `;
+                console.error('Failed to load data:', error);
+                document.getElementById('error-text').innerHTML =
+                    `<p><b>Data fetch error.</b> Please verify that your sheet is published correctly.</p>`;
                 errorMessage.classList.remove('hidden');
-                tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-red-500">Failed to load data. Check console for details.</td></tr>';
             }
         }
 
-        // Renders the table based on filtered data
+        // Render table
         function renderTable(data) {
-            // Remove the first row if it contains header data (common issue with gviz/tq)
-            // We check if the first row value looks like a header (e.g., contains 'Location' or 'Time')
-            if (data.length > 0 && (data[0]['Location'].includes('Location') || data[0]['Time'].includes('Time'))) {
-                data.shift();
-            }
-
             if (data.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-500">No available courts found or data is loading.</td></tr>';
+                tableBody.innerHTML =
+                    '<tr><td colspan="4" class="text-center py-6 text-gray-500">No data available.</td></tr>';
                 return;
             }
 
             const html = data.map(court => {
-                // Accessing data using the fixed mapped names
                 const location = court['Location'] || 'N/A';
-                const timeSlot = court['Time'] || 'N/A';
-                const status = (court['Status'] || 'N/A').toLowerCase(); // Convert to lowercase for consistent checking
+                const timeSlot = convertTo24Hour(court['Time'] || 'N/A');
+                const status = (court['Status'] || 'N/A').toLowerCase();
                 const lastChecked = court['Last_Checked'] || 'N/A';
-                
-                // Dynamic styling based on the court status (using lowercase 'available'/'booked')
+
                 const statusColor = status.includes('available')
-                    ? 'bg-green-100 text-green-800' 
+                    ? 'bg-green-100 text-green-800'
                     : status.includes('booked')
-                    ? 'bg-red-100 text-red-800' 
-                    : 'bg-yellow-100 text-yellow-800'; // Default for N/A or other
+                    ? 'bg-red-100 text-red-800'
+                    : 'bg-yellow-100 text-yellow-800';
 
                 return `
-                    <tr class="hover:bg-gray-50 transition duration-100">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${location}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${timeSlot}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor} capitalize">
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-6 py-4 text-sm font-medium text-gray-900">${location}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${timeSlot}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-3 py-1 text-xs font-semibold rounded-full ${statusColor}">
                                 ${status}
                             </span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${lastChecked}</td>
+                        <td class="px-6 py-4 text-sm text-gray-500">${lastChecked}</td>
                     </tr>
                 `;
             }).join('');
@@ -214,34 +211,29 @@ const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tq
             tableBody.innerHTML = html;
         }
 
-        // Filters and searches the data
-        function filterAndSearch() {
-            const searchTerm = searchInput.value.toLowerCase();
-            const selectedStatus = statusFilter.value;
-
-            const filteredData = courtData.filter(court => {
-                // 1. Status Filter - check status in lowercase
-                const courtStatus = (court['Status'] || '').toLowerCase();
-                const statusMatch = selectedStatus === 'all' || courtStatus.includes(selectedStatus);
-                
-                // 2. Search Filter (by Location)
-                const searchMatch = (court['Location'] || '').toLowerCase().includes(searchTerm);
-                
-                return statusMatch && searchMatch;
-            });
-
-            renderTable(filteredData);
-        }
-
-        // Add event listeners for interactivity
+        // Filter events
         searchInput.addEventListener('input', filterAndSearch);
         statusFilter.addEventListener('change', filterAndSearch);
 
-        // Fetch data on page load
-        fetchCourtData();
-        // Refresh the data every 5 minutes (300000 ms)
-        setInterval(fetchCourtData, 300000); 
+        function filterAndSearch() {
+            const term = searchInput.value.toLowerCase();
+            const selectedStatus = statusFilter.value;
 
+            const filtered = courtData.filter(court => {
+                const status = (court['Status'] || '').toLowerCase();
+                const location = (court['Location'] || '').toLowerCase();
+
+                return (selectedStatus === 'all' || status.includes(selectedStatus))
+                    && location.includes(term);
+            });
+
+            renderTable(filtered);
+        }
+
+        // Initial load + refresh every 5 minutes
+        fetchCourtData();
+        setInterval(fetchCourtData, 300000);
     </script>
+
 </body>
 </html>
