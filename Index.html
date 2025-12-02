@@ -162,9 +162,19 @@
 
             } catch (error) {
                 console.error('Failed to load data from Google Sheet:', error);
-                document.getElementById('error-text').textContent = `Failed to load data. Please ensure the Google Sheet is shared as "Anyone with the link can view." If the problem persists, try unpublishing and republishing the sheet to the web.`;
+                
+                // CRITICAL ERROR MESSAGE CHANGE: Explain the 302/CORS issue and provide the fix.
+                document.getElementById('error-text').innerHTML = `
+                    <p class="font-bold">Access Denied (Login Redirect).</p>
+                    <p>The sheet data cannot be retrieved because Google is redirecting the request to a login page (HTTP 302). You MUST publish the sheet correctly:</p>
+                    <ul class="list-disc list-inside mt-2 ml-4">
+                        <li>Go to **File &gt; Share &gt; Publish to the web**.</li>
+                        <li>Select the entire document or the 'Rishon\_Available' sheet.</li>
+                        <li>Click **Publish** to ensure the sheet is accessible by anonymous scripts.</li>
+                    </ul>
+                `;
                 errorMessage.classList.remove('hidden');
-                tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-red-500">Failed to load data. Check console for details.</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-red-500">Failed to load data. See error message above for fix steps.</td></tr>';
             }
         }
 
