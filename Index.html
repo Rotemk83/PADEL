@@ -73,22 +73,33 @@ const COLUMN_MAP = ['Location', 'Time', 'status', 'Last_Checked'];
 
 /* Convert "4-4:30 PM" → "16:00-16:30" */
 function convertTo24Hour(timeRange) {
-    if (!timeRange) return timeRange;
+    if (!timeRange || typeof timeRange !== "string") return timeRange;
+
     try {
-        const parts = timeRange.trim().split(" ");
-        const period = parts.pop(); 
+        // Normalize formats: add space before AM/PM if missing
+        timeRange = timeRange.replace(/(AM|PM)$/i, " $1").trim();
+
+        // Now split safely
+        const parts = timeRange.split(" ");
+        const period = parts.pop().toUpperCase();   // AM or PM
         const range = parts.join(" ").split("-");
 
         const convert = (t) => {
             let [h, m] = t.split(":");
             h = parseInt(h);
             m = m ? parseInt(m) : 0;
+
             if (period === "PM" && h !== 12) h += 12;
             if (period === "AM" && h === 12) h = 0;
+
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         };
+
         return `${convert(range[0])}-${convert(range[1])}`;
-    } catch { return timeRange; }
+    } catch (err) {
+        console.warn("Time conversion failed for:", timeRange);
+        return timeRange;
+    }
 }
 
 /* Fetch with Retry */
