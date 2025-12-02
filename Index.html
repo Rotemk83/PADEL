@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Padel Monitor Dashboard</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9;
+        }
+        /* Custom scrollbar styling for the table container */
+        .scroll-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div class="max-w-6xl mx-auto bg-white p-6 sm:p-8 rounded-xl shadow-2xl">
+        
+        <!-- Header -->
+        <header class="mb-8 border-b pb-4">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 flex items-center">
+                🎾 Live Padel Court Monitor - Rishon Lezion
+            </h1>
+            <p id="last-updated" class="text-sm text-gray-500 mt-1"></p>
+        </header>
+
+        <!-- Control Panel -->
+        <div class="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-center">
+            <input 
+                type="text" 
+                id="search-input" 
+                placeholder="Search by Location..." 
+                class="w-full sm:w-64 p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 transition duration-150"
+            />
+            <div class="flex items-center space-x-4 w-full sm:w-auto">
+                <label for="status-filter" class="text-gray-700 font-medium">Filter Status:</label>
+                <select id="status-filter" class="p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 transition duration-150">
+                    <option value="all">All Statuses</option>
+                    <!-- Note: Your data shows 'available', not 'Available', so we'll adjust the options -->
+                    <option value="available">Available</option> 
+                    <option value="booked">Booked</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Data Display Area (Table) -->
+        <div class="scroll-container overflow-x-auto shadow-inner rounded-lg border border-gray-100">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50 sticky top-0">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Time Slot</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Checked</th>
+                    </tr>
+                </thead>
+                <tbody id="courts-table-body" class="bg-white divide-y divide-gray-100">
+                    <!-- Data will be injected here -->
+                    <tr><td colspan="4" class="text-center py-6 text-gray-500">Loading court data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Error Message -->
+        <div id="error-message" class="hidden mt-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg" role="alert">
+            <strong class="font-bold">Error:</strong> 
+            <span id="error-text" class="block sm:inline">Could not load data. Please ensure the Google Sheet ID is correct and the sheet is published to the web.</span>
+        </div>
+        
+    </div>
+
+    <script>
+        // =================================================================
+        // STEP 1: Replace this with your actual Google Sheet ID
+        //
+        // How to find the ID:
+        // 1. Open your Google Sheet in a browser.
+        // 2. Look at the URL in the address bar.
+        // 3. The ID is the long string between /d/ and /edit/
+        //    Example: https://docs.google.com/spreadsheets/d/THIS_IS_THE_ID/edit
+        // =================================================================
+        const SHEET_ID = 'YOUR_GOOGLE_SHEET_ID_HERE'; 
+        // Sheet name updated to reflect your input
+        const SHEET_NAME = 'Rishon_Available'; 
+        
+        const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
+        
+        // =================================================================
+
+        const tableBody = document.getElementById('courts-table-body');
+        const searchInput = document.getElementById('search-input');
+        const statusFilter = document.getElementById('status-filter');
+        const lastUpdated = document.getElementById('last-updated');
+        const errorMessage = document.getElementById('error-message');
+        
+        let courtData = [];
+
+        // Utility to handle exponential backoff for retries
+        const fetchWithRetry = async (url, maxRetries = 5) => {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return await response.text();
+                } catch (error) {
+                    console.error(`Attempt ${i + 1} failed:`, error.message);
+                    if (i === maxRetries - 1) throw error; 
+                    // Wait for 2^i seconds before next retry
+                    const delay = Math.pow(2, i) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        };
+
+        // Fetches and parses the data from the Google Sheet
+        async function fetchCourtData() {
+            try {
+                tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-green-500 animate-pulse">Fetching Padel data...</td></tr>';
+                errorMessage.classList.add('hidden');
+
+                const responseText = await fetchWithRetry(SHEET_URL);
+
+                // Google Sheets API returns JSON wrapped in a function call (JSONP format)
+                const jsonText = responseText.substring(
+                    responseText.indexOf("{"), 
+                    responseText.lastIndexOf("}") + 1
+                );
+                const json = JSON.parse(jsonText);
+                
+                // Extract column headers and rows
+                const cols = json.table.cols.map(col => col.label);
+                const rows = json.table.rows;
+
+                // Transform rows into an array of objects
+                courtData = rows.map(row => {
+                    let court = {};
+                    row.c.forEach((cell, index) => {
+                        const header = cols[index];
+                        // Extract the raw value or a friendly display value
+                        court[header] = cell ? (cell.v || cell.f || '') : '';
+                    });
+                    return court;
+                });
+                
+                // Initial render
+                renderTable(courtData);
+                lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()} (Data from Google Sheet)`;
+
+            } catch (error) {
+                console.error('Failed to load data from Google Sheet:', error);
+                document.getElementById('error-text').textContent = `Failed to load data from sheet "${SHEET_NAME}". Details: ${error.message}`;
+                errorMessage.classList.remove('hidden');
+                tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-red-500">Failed to load data. Check console for details.</td></tr>';
+            }
+        }
+
+        // Renders the table based on filtered data
+        function renderTable(data) {
+            if (data.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-500">No courts match your filter criteria.</td></tr>';
+                return;
+            }
+
+            const html = data.map(court => {
+                // Accessing data using the exact column names provided by the user
+                const location = court['Location'] || 'N/A';
+                const timeSlot = court['Time'] || 'N/A';
+                const status = (court['Status'] || 'N/A').toLowerCase(); // Convert to lowercase for consistent checking
+                const lastChecked = court['Last_Checked'] || 'N/A';
+                
+                // Dynamic styling based on the court status (using lowercase 'available'/'booked')
+                const statusColor = status === 'available' 
+                    ? 'bg-green-100 text-green-800' 
+                    : status === 'booked' 
+                    ? 'bg-red-100 text-red-800' 
+                    : 'bg-yellow-100 text-yellow-800'; // Default for N/A or other
+
+                return `
+                    <tr class="hover:bg-gray-50 transition duration-100">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${location}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${timeSlot}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor} capitalize">
+                                ${status}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${lastChecked}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            tableBody.innerHTML = html;
+        }
+
+        // Filters and searches the data
+        function filterAndSearch() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const selectedStatus = statusFilter.value;
+
+            const filteredData = courtData.filter(court => {
+                // 1. Status Filter - check status in lowercase
+                const courtStatus = (court['Status'] || '').toLowerCase();
+                const statusMatch = selectedStatus === 'all' || courtStatus === selectedStatus;
+                
+                // 2. Search Filter (by Location)
+                const searchMatch = (court['Location'] || '').toLowerCase().includes(searchTerm);
+                
+                return statusMatch && searchMatch;
+            });
+
+            renderTable(filteredData);
+        }
+
+        // Add event listeners for interactivity
+        searchInput.addEventListener('input', filterAndSearch);
+        statusFilter.addEventListener('change', filterAndSearch);
+
+        // Fetch data on page load
+        if (SHEET_ID === 'YOUR_GOOGLE_SHEET_ID_HERE') {
+            document.getElementById('error-text').innerHTML = '<strong>Setup Required:</strong> Please replace `YOUR_GOOGLE_SHEET_ID_HERE` with your actual Sheet ID in the JavaScript code block.';
+            errorMessage.classList.remove('hidden');
+            tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-red-500">Setup required. See instructions.</td></tr>';
+        } else {
+            fetchCourtData();
+            // Refresh the data every 5 minutes (300000 ms)
+            setInterval(fetchCourtData, 300000); 
+        }
+
+    </script>
+</body>
+</html>
