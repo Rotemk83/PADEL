@@ -93,8 +93,8 @@
         // =================================================================
         const SHEET_GID = '707982245'; 
         
-        // ** URL structure updated to use GID instead of sheet name **
-        const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+        // ** CRITICAL FIX: Changed /gviz/tq to /pubgviz/tq for Public Key compatibility **
+        const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pubgviz/tq?tqx=out:json&gid=${SHEET_GID}`;
         
         // =================================================================
 
