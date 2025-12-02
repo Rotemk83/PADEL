@@ -81,19 +81,20 @@
 
     <script>
         // =================================================================
-        // STEP 1: Replace this with your actual Google Sheet ID
+        // STEP 1: PASTE YOUR PUBLIC KEY HERE
         //
-        // How to find the ID:
-        // 1. Open your Google Sheet in a browser.
-        // 2. Look at the URL in the address bar.
-        // 3. The ID is the long string between /d/ and /edit/
-        //    Example: https://docs.google.com/spreadsheets/d/THIS_IS_THE_ID/edit
+        // You published your sheet to:
+        // https://docs.google.com/spreadsheets/d/e/2PACX-1vRwpAYTaQblbjNcMK3GDB0d98LlUSF8I1RD4imey9mBE8ftai2mIALiHHdztejizeUJkzXzLPXjj0Fd/pubhtml
+        //
+        // Your Public Key is the long string AFTER /d/e/ and before /pubhtml
+        // You MUST replace the placeholder below with that long key.
         // =================================================================
-        const SHEET_ID = '1O76uXL2OjkzvhRlL70xQG6nwmgUJGoDcRK9gOCR_7xY'; 
+        const SHEET_ID = 'YOUR_GOOGLE_SHEET_PUBLIC_KEY_HERE'; 
         // Sheet name updated to reflect your input
         const SHEET_NAME = 'Rishon_Available'; 
         
-        const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
+        // ** URL structure updated to handle the Public Key format **
+        const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
         
         // =================================================================
 
@@ -111,6 +112,7 @@
                 try {
                     const response = await fetch(url);
                     if (!response.ok) {
+                        // Throw an error if the response status is not OK (e.g., 404 or a redirect)
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
                     return await response.text();
@@ -160,7 +162,7 @@
 
             } catch (error) {
                 console.error('Failed to load data from Google Sheet:', error);
-                document.getElementById('error-text').textContent = `Failed to load data from sheet "${SHEET_NAME}". Details: ${error.message}`;
+                document.getElementById('error-text').textContent = `Failed to load data from sheet "${SHEET_NAME}". Details: ${error.message}. Please verify the Public Key and ensure the Sheet is published.`;
                 errorMessage.classList.remove('hidden');
                 tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-red-500">Failed to load data. Check console for details.</td></tr>';
             }
@@ -228,10 +230,10 @@
         statusFilter.addEventListener('change', filterAndSearch);
 
         // Fetch data on page load
-        if (SHEET_ID === 'YOUR_GOOGLE_SHEET_ID_HERE') {
-            document.getElementById('error-text').innerHTML = '<strong>Setup Required:</strong> Please replace `YOUR_GOOGLE_SHEET_ID_HERE` with your actual Sheet ID in the JavaScript code block.';
+        if (SHEET_ID === 'YOUR_GOOGLE_SHEET_PUBLIC_KEY_HERE') {
+            document.getElementById('error-text').innerHTML = '<strong>Setup Required:</strong> Please replace `YOUR_GOOGLE_SHEET_PUBLIC_KEY_HERE` with your actual Public Key in the JavaScript code block.';
             errorMessage.classList.remove('hidden');
-            tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-red-500">Setup required. See instructions.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-red-500">Setup required. See instructions in the code.</td></tr>';
         } else {
             fetchCourtData();
             // Refresh the data every 5 minutes (300000 ms)
