@@ -81,18 +81,20 @@
 
     <script>
         // =================================================================
-        // STEP 1: PASTE YOUR PUBLIC KEY HERE
-        //
-        // Your Public Key is the long string after /d/e/ and before /pubhtml.
-        // It MUST be enclosed in single quotes ('').
-        // Example: const SHEET_ID = '2PACX-1v...your-actual-key...jizeUJkzXzLPXjj0Fd'; 
+        // STEP 1: PUBLIC KEY (From your published link)
+        // This is necessary for public API access (the /d/e/ URL format).
         // =================================================================
         const SHEET_ID = '2PACX-1vRwpAYTaQblbjNcMK3GDB0d98LlUSF8I1RD4imey9mBE8ftai2mIALiHHdztejizeUJkzXzLPXjj0Fd'; 
-        // Sheet name updated to reflect your input
-        const SHEET_NAME = 'Rishon_Available'; 
         
-        // ** URL structure updated to handle the Public Key format **
-        const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
+        // =================================================================
+        // STEP 2: GID (Grid ID) - CORRECTED
+        // This targets the specific "Rishon_Available" sheet tab.
+        // Value provided by user from URL: 707982245
+        // =================================================================
+        const SHEET_GID = '707982245'; 
+        
+        // ** URL structure updated to use GID instead of sheet name **
+        const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
         
         // =================================================================
 
@@ -160,7 +162,7 @@
 
             } catch (error) {
                 console.error('Failed to load data from Google Sheet:', error);
-                document.getElementById('error-text').textContent = `Failed to load data from sheet "${SHEET_NAME}". Details: ${error.message}. Please verify the Public Key and ensure the Sheet is published.`;
+                document.getElementById('error-text').textContent = `Failed to load data. The URL returned a 404 Not Found. Please verify the GID is correct and the sheet is still published.`;
                 errorMessage.classList.remove('hidden');
                 tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-red-500">Failed to load data. Check console for details.</td></tr>';
             }
@@ -228,15 +230,9 @@
         statusFilter.addEventListener('change', filterAndSearch);
 
         // Fetch data on page load
-        if (SHEET_ID === 'YOUR_GOOGLE_SHEET_PUBLIC_KEY_HERE') {
-            document.getElementById('error-text').innerHTML = '<strong>Setup Required:</strong> Please replace `YOUR_GOOGLE_SHEET_PUBLIC_KEY_HERE` with your actual Public Key in the JavaScript code block.';
-            errorMessage.classList.remove('hidden');
-            tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-red-500">Setup required. See instructions in the code.</td></tr>';
-        } else {
-            fetchCourtData();
-            // Refresh the data every 5 minutes (300000 ms)
-            setInterval(fetchCourtData, 300000); 
-        }
+        fetchCourtData();
+        // Refresh the data every 5 minutes (300000 ms)
+        setInterval(fetchCourtData, 300000); 
 
     </script>
 </body>
