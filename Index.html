@@ -12,6 +12,8 @@
         body { font-family: 'Inter', sans-serif; background:#f4f7f9; }
         .scroll-container::-webkit-scrollbar { height: 8px; }
         .scroll-container::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:10px; }
+        .day-btn { transition: 0.2s; }
+        .day-btn:hover { background:#aee3ae; }
     </style>
 </head>
 
@@ -19,28 +21,20 @@
 
 <div class="max-w-6xl mx-auto bg-white p-6 sm:p-8 rounded-xl shadow-2xl">
 
+    <!-- HEADER -->
     <header class="mb-8 border-b pb-4">
-        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900">🎾 Live Padel Court Monitor - Rishon Lezion</h1>
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900">
+            🎾 Live Padel Court Monitor - Rishon Lezion
+        </h1>
         <p id="last-updated" class="text-sm text-gray-500 mt-1"></p>
     </header>
 
-    <!-- Filters -->
+    <!-- SEARCH + STATUS -->
     <div class="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-center">
         <input id="search-input" type="text" placeholder="Search by Location..."
             class="w-full sm:w-64 p-3 border rounded-lg focus:ring-green-500">
         
         <div class="flex items-center space-x-4">
-            			<!-- Day Filter Buttons -->
-<div id="day-buttons" class="flex flex-wrap gap-2 mt-4">
-    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="ALL">All</button>
-    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="SUN">SU</button>
-    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="MON">MO</button>
-    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="TUE">TU</button>
-    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="WED">WED</button>
-    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="THU">THU</button>
-    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="FRI">FRI</button>
-    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="SAT">SAT</button>
-</div>
             <label class="text-gray-700 font-medium">Filter Status:</label>
             <select id="status-filter" class="p-3 border rounded-lg focus:ring-green-500">
                 <option value="all">All Statuses</option>
@@ -50,10 +44,22 @@
         </div>
     </div>
 
-    <!-- Table -->
+    <!-- DAY FILTER BUTTONS -->
+    <div id="day-buttons" class="flex flex-wrap gap-2 mb-6">
+        <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="ALL">All</button>
+        <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="SUN">SUN</button>
+        <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="MON">MON</button>
+        <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="TUE">TUE</button>
+        <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="WED">WED</button>
+        <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="THU">THU</button>
+        <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="FRI">FRI</button>
+        <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="SAT">SAT</button>
+    </div>
+
+    <!-- TABLE -->
     <div class="scroll-container overflow-x-auto shadow-inner rounded-lg border border-gray-100">
         <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
+            <thead class="bg-gray-50 sticky top-0">
                 <tr>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Location</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Time Slot</th>
@@ -67,6 +73,7 @@
         </table>
     </div>
 
+    <!-- ERROR -->
     <div id="error-message" class="hidden mt-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
         <strong>Error:</strong> <span id="error-text">Failed to load data.</span>
     </div>
@@ -74,25 +81,23 @@
 </div>
 
 <script>
-/* CONFIG */
+/* GOOGLE SHEET SETTINGS */
 const SHEET_ID = '1O76uXL2OjkzvhRlL70xQG6nwmgUJGoDcRK9gOCR_7xY';
 const SHEET_GID = '707982245';
-const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+const SHEET_URL =
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
 
-/* COLUMN NAMES MATCHING YOUR SHEET EXACTLY */
+/* COLUMN HEADERS FROM SHEET */
 const COLUMN_MAP = ['Location', 'Time', 'status', 'Last_Checked'];
 
-/* Convert "4-4:30 PM" → "16:00-16:30" */
+/* TIME CONVERSION — supports 4-4:30PM or 4-4:30 PM */
 function convertTo24Hour(timeRange) {
     if (!timeRange || typeof timeRange !== "string") return timeRange;
 
     try {
-        // Normalize formats: add space before AM/PM if missing
         timeRange = timeRange.replace(/(AM|PM)$/i, " $1").trim();
-
-        // Now split safely
         const parts = timeRange.split(" ");
-        const period = parts.pop().toUpperCase();   // AM or PM
+        const period = parts.pop().toUpperCase();
         const range = parts.join(" ").split("-");
 
         const convert = (t) => {
@@ -105,15 +110,17 @@ function convertTo24Hour(timeRange) {
 
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         };
-
         return `${convert(range[0])}-${convert(range[1])}`;
-    } catch (err) {
-        console.warn("Time conversion failed for:", timeRange);
-        return timeRange;
-    }
+    } catch { return timeRange; }
 }
 
-/* Fetch with Retry */
+/* EXTRACT DAY FROM LOCATION (WED/THU/FRI...) */
+function extractDayCode(locationText) {
+    const match = locationText.match(/\((\w{3})\s/i);
+    return match ? match[1].toUpperCase() : "";
+}
+
+/* RETRY FETCH */
 async function fetchText(url) {
     for (let i = 0; i < 3; i++) {
         try {
@@ -127,7 +134,7 @@ async function fetchText(url) {
 
 let courtData = [];
 
-/* Fetch + Parse */
+/* LOAD SHEET DATA */
 async function loadData() {
     try {
         const raw = await fetchText(SHEET_URL);
@@ -141,10 +148,7 @@ async function loadData() {
             return out;
         });
 
-        /* REMOVE HEADER ROW AUTOMATICALLY */
-        if (courtData.length && courtData[0].Location === "Location") {
-            courtData.shift();
-        }
+        if (courtData.length && courtData[0].Location === "Location") courtData.shift();
 
         renderTable(courtData);
 
@@ -157,18 +161,18 @@ async function loadData() {
     }
 }
 
-/* Render Table */
+/* RENDER TABLE */
 function renderTable(data) {
     const tbody = document.getElementById("courts-table-body");
 
     if (!data.length) {
         tbody.innerHTML =
-            '<tr><td colspan="4" class="text-center py-6 text-gray-500">No data available</td></tr>';
+          '<tr><td colspan="4" class="text-center py-6 text-gray-500">No data found</td></tr>';
         return;
     }
 
     tbody.innerHTML = data.map(row => {
-        const time24 = convertTo24Hour(row.Time);
+        const time = convertTo24Hour(row.Time);
         const status = (row.status || '').toLowerCase();
 
         const color =
@@ -179,7 +183,7 @@ function renderTable(data) {
         return `
         <tr class="hover:bg-gray-50">
             <td class="px-6 py-4">${row.Location}</td>
-            <td class="px-6 py-4">${time24}</td>
+            <td class="px-6 py-4">${time}</td>
             <td class="px-6 py-4">
                 <span class="px-3 py-1 rounded-full text-xs font-semibold ${color}">
                     ${status}
@@ -189,7 +193,8 @@ function renderTable(data) {
         </tr>`;
     }).join('');
 }
-    /* EVENT LISTENERS FOR DAY BUTTONS */
+
+/* SEARCH + STATUS + DAY FILTERS */
 let selectedDay = "ALL";
 
 document.querySelectorAll(".day-btn").forEach(btn => {
@@ -204,22 +209,22 @@ document.querySelectorAll(".day-btn").forEach(btn => {
         filterAndSearch();
     });
 });
+
+document.getElementById("search-input").addEventListener("input", filterAndSearch);
+document.getElementById("status-filter").addEventListener("change", filterAndSearch);
+
 function filterAndSearch() {
-    const term = searchInput.value.toLowerCase();
-    const selectedStatus = statusFilter.value;
+    const term = document.getElementById("search-input").value.toLowerCase();
+    const statusFilter = document.getElementById("status-filter").value;
 
-    const filtered = courtData.filter(court => {
-        const location = (court['Location'] || '').toLowerCase();
-        const status = (court['status'] || '').toLowerCase();
+    const filtered = courtData.filter(r => {
+        const location = (r.Location || '').toLowerCase();
+        const status = (r.status || '').toLowerCase();
 
-        // ---- DAY FILTER ----
-        const dayCode = extractDayCode(court['Location']);
+        const dayCode = extractDayCode(r.Location);
+
         const dayMatch = (selectedDay === "ALL" || selectedDay === dayCode);
-
-        // ---- STATUS FILTER ----
-        const statusMatch = (selectedStatus === "all" || status.includes(selectedStatus));
-
-        // ---- SEARCH FILTER ----
+        const statusMatch = (statusFilter === "all" || status.includes(statusFilter));
         const searchMatch = location.includes(term);
 
         return dayMatch && statusMatch && searchMatch;
@@ -228,10 +233,9 @@ function filterAndSearch() {
     renderTable(filtered);
 }
 
-
-/* Init */
+/* INIT */
 loadData();
-setInterval(loadData, 300000); // refresh every 5 minutes
+setInterval(loadData, 300000);
 </script>
 
 </body>
