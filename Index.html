@@ -30,6 +30,17 @@
             class="w-full sm:w-64 p-3 border rounded-lg focus:ring-green-500">
         
         <div class="flex items-center space-x-4">
+            			<!-- Day Filter Buttons -->
+<div id="day-buttons" class="flex flex-wrap gap-2 mt-4">
+    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="ALL">All</button>
+    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="SUN">SU</button>
+    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="MON">MO</button>
+    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="TUE">TU</button>
+    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="WED">WED</button>
+    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="THU">THU</button>
+    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="FRI">FRI</button>
+    <button class="day-btn px-3 py-1 bg-gray-200 rounded" data-day="SAT">SAT</button>
+</div>
             <label class="text-gray-700 font-medium">Filter Status:</label>
             <select id="status-filter" class="p-3 border rounded-lg focus:ring-green-500">
                 <option value="all">All Statuses</option>
@@ -178,22 +189,45 @@ function renderTable(data) {
         </tr>`;
     }).join('');
 }
+    /* EVENT LISTENERS FOR DAY BUTTONS */
+let selectedDay = "ALL";
 
-/* Search + Filter */
-document.getElementById("search-input").addEventListener("input", filterData);
-document.getElementById("status-filter").addEventListener("change", filterData);
+document.querySelectorAll(".day-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".day-btn").forEach(b =>
+            b.classList.remove("bg-green-300")
+        );
 
-function filterData() {
-    const term = document.getElementById("search-input").value.toLowerCase();
-    const statusFilter = document.getElementById("status-filter").value;
+        btn.classList.add("bg-green-300");
+        selectedDay = btn.dataset.day;
 
-    const filtered = courtData.filter(r =>
-        r.Location.toLowerCase().includes(term) &&
-        (statusFilter === "all" || r.status.toLowerCase().includes(statusFilter))
-    );
+        filterAndSearch();
+    });
+});
+function filterAndSearch() {
+    const term = searchInput.value.toLowerCase();
+    const selectedStatus = statusFilter.value;
+
+    const filtered = courtData.filter(court => {
+        const location = (court['Location'] || '').toLowerCase();
+        const status = (court['status'] || '').toLowerCase();
+
+        // ---- DAY FILTER ----
+        const dayCode = extractDayCode(court['Location']);
+        const dayMatch = (selectedDay === "ALL" || selectedDay === dayCode);
+
+        // ---- STATUS FILTER ----
+        const statusMatch = (selectedStatus === "all" || status.includes(selectedStatus));
+
+        // ---- SEARCH FILTER ----
+        const searchMatch = location.includes(term);
+
+        return dayMatch && statusMatch && searchMatch;
+    });
 
     renderTable(filtered);
 }
+
 
 /* Init */
 loadData();
